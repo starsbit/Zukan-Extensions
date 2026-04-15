@@ -106,17 +106,33 @@ def _summarize(results: list[dict]) -> tuple[int, int, int]:
     return accepted, duplicate, failed
 
 
-async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict]:
-    cobalt_headers = {"Accept": "application/json", "Content-Type": "application/json"}
+def _cobalt_headers() -> dict[str, str]:
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
     if COBALT_AUTH_TOKEN:
-        cobalt_headers[COBALT_AUTH_HEADER] = (
+        headers[COBALT_AUTH_HEADER] = (
             f"{COBALT_AUTH_SCHEME} {COBALT_AUTH_TOKEN}" if COBALT_AUTH_SCHEME else COBALT_AUTH_TOKEN
         )
+    return headers
 
+
+async def is_cobalt_reachable(client: httpx.AsyncClient) -> tuple[bool, str]:
+    try:
+        resp = await client.get(
+            f"{COBALT_BASE_URL}/",
+            headers=_cobalt_headers(),
+            timeout=8.0,
+            follow_redirects=True,
+        )
+        return True, f"status={resp.status_code}"
+    except httpx.RequestError as exc:
+        return False, str(exc)
+
+
+async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict]:
     resp = await client.post(
         f"{COBALT_BASE_URL}/",
         json={"url": tweet_url, "downloadMode": "auto", "filenameStyle": "basic"},
-        headers=cobalt_headers,
+        headers=_cobalt_headers(),
         timeout=30.0,
     )
     try:
@@ -246,7 +262,14 @@ def _is_authorized(update: Update) -> bool:
 async def health(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_authorized(update):
         return
-    await update.message.reply_text("ok")
+
+    async with httpx.AsyncClient() as client:
+        reachable, detail = await is_cobalt_reachable(client)
+
+    if reachable:
+        await update.message.reply_text("ok")
+    else:
+        await update.message.reply_text(f"unhealthy: cobalt unreachable ({detail})")
 
 
 def main() -> None:

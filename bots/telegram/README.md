@@ -92,4 +92,4 @@ The bot replies with a summary:
 
 Non-tweet messages receive a usage hint.
 
-The `/health` command returns `ok` for the allowed Telegram user.
+The `/health` command returns `ok` for the allowed Telegram user only when the configured Cobalt instance is reachable.
