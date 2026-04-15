@@ -5,7 +5,7 @@ from urllib.parse import urlparse, unquote
 import httpx
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 load_dotenv()
 
@@ -14,6 +14,7 @@ ZUKAN_BASE_URL = os.environ["ZUKAN_BASE_URL"].rstrip("/")
 ZUKAN_TOKEN = os.environ["ZUKAN_TOKEN"]
 COBALT_BASE_URL = os.environ.get("COBALT_BASE_URL", "https://api.cobalt.tools").rstrip("/")
 DEFAULT_VISIBILITY = os.environ.get("DEFAULT_VISIBILITY", "private")
+ALLOWED_TELEGRAM_USER_ID = int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
 TWEET_RE = re.compile(
     r"https?://(?:x|twitter)\.com/([^/?\s]+)/status/(\d+)",
@@ -183,6 +184,9 @@ async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_authorized(update):
+        return
+
     text = update.message.text or ""
     tweet_url = normalize_tweet_url(text)
 
@@ -221,8 +225,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"Error: {exc}")
 
 
+def _is_authorized(update: Update) -> bool:
+    user = update.effective_user
+    return bool(user and user.id == ALLOWED_TELEGRAM_USER_ID)
+
+
+async def health(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_authorized(update):
+        return
+    await update.message.reply_text("ok")
+
+
 def main() -> None:
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("health", health))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()
 
