@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 import httpx
@@ -39,6 +40,19 @@ CONTENT_TYPE_EXT = {
     "video/x-msvideo": "avi",
 }
 
+EXT_CONTENT_TYPE = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "gif": "image/gif",
+    "avif": "image/avif",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "mov": "video/quicktime",
+    "avi": "video/x-msvideo",
+}
+
 INGEST_FALLBACK_STATUSES = {400, 403, 404, 415, 422, 502}
 
 
@@ -52,6 +66,19 @@ def normalize_tweet_url(text: str) -> str | None:
 def _ext_from_content_type(content_type: str) -> str:
     base = content_type.split(";", 1)[0].strip().lower()
     return CONTENT_TYPE_EXT.get(base, "")
+
+
+def _content_type_from_filename(filename: str) -> str:
+    ext = Path(filename).suffix.lower().lstrip(".")
+    return EXT_CONTENT_TYPE.get(ext, "")
+
+
+def _normalize_upload_content_type(content_type: str, filename: str) -> str:
+    base = content_type.split(";", 1)[0].strip().lower() if content_type else ""
+    if base and base != "application/octet-stream":
+        return base
+    inferred = _content_type_from_filename(filename)
+    return inferred or base or "application/octet-stream"
 
 
 def _filename_from_disposition(header: str | None) -> str | None:
@@ -205,10 +232,11 @@ async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int
     content_type = media_resp.headers.get("content-type", "")
     content_disposition = media_resp.headers.get("content-disposition", "")
     filename = preferred_filename or derive_filename(url, content_type, content_disposition)
+    upload_content_type = _normalize_upload_content_type(content_type, filename)
 
     upload_resp = await client.post(
         f"{ZUKAN_BASE_URL}/api/v1/media",
-        files=[("files", (filename, media_resp.content, content_type))],
+        files=[("files", (filename, media_resp.content, upload_content_type))],
         data={"visibility": DEFAULT_VISIBILITY},
         headers=auth,
         timeout=120.0,
