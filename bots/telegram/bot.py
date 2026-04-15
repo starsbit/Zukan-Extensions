@@ -102,11 +102,21 @@ def _should_fallback(status: int, payload: dict) -> bool:
     return True
 
 
-def _summarize(results: list[dict]) -> tuple[int, int, int]:
+def _extract_result_reason(result: dict) -> str:
+    for key in ("detail", "error", "reason", "message"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "unknown failure"
+
+
+def _summarize(results: list[dict]) -> tuple[int, int, int, list[str]]:
     accepted = sum(1 for r in results if r.get("status") == "accepted")
     duplicate = sum(1 for r in results if r.get("status") == "duplicate")
-    failed = sum(1 for r in results if r.get("status") not in ("accepted", "duplicate"))
-    return accepted, duplicate, failed
+    failed_results = [r for r in results if r.get("status") not in ("accepted", "duplicate")]
+    failed = len(failed_results)
+    failure_reasons = [_extract_result_reason(r) for r in failed_results]
+    return accepted, duplicate, failed, failure_reasons
 
 
 def _cobalt_headers() -> dict[str, str]:
@@ -166,7 +176,7 @@ async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict
     raise ValueError(f"Unexpected Cobalt response: {status}")
 
 
-async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int, int]:
+async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int, int, list[str]]:
     url = asset["url"]
     preferred_filename = asset.get("filename")
     auth = {"Authorization": f"Bearer {ZUKAN_TOKEN}"}
@@ -237,10 +247,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             for asset in assets:
                 try:
-                    a, d, f = await upload_asset(client, asset)
+                    a, d, f, reasons = await upload_asset(client, asset)
                     total_accepted += a
                     total_duplicate += d
                     total_failed += f
+                    failure_reasons.extend(r for r in reasons if r)
                 except Exception as exc:
                     total_failed += 1
                     logger.exception("Failed to process asset from Cobalt: %s", asset.get("url", "unknown-url"))
