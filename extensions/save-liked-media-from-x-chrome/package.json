@@ -1,0 +1,8 @@
+{
+  "name": "save-liked-media-from-x-chrome",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test helpers.test.js x.test.js background-core.test.js"
+  }
+}

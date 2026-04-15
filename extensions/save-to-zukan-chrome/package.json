@@ -1,0 +1,8 @@
+{
+  "name": "save-to-zukan-chrome",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test helpers.test.js"
+  }
+}

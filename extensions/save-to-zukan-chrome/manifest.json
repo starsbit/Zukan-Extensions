@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Zukan",
+  "description": "Save images, GIFs, and videos from the web directly into Zukan.",
+  "version": "0.1.0",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_title": "Save to Zukan",
+    "default_icon": {
+      "128": "icon-128.png"
+    }
+  },
+  "options_page": "options.html"
+}

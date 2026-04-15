@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Save to Zukan Options</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <p class="eyebrow">Save to Zukan</p>
+        <h1>Extension setup</h1>
+        <p class="intro">Connect this extension to your Zukan server with a base URL and a user API key.</p>
+        <form id="options-form">
+          <label class="field">
+            <span>Zukan Base URL</span>
+            <input id="base-url" name="baseUrl" type="url" placeholder="https://zukan.example.com" autocomplete="url" required>
+          </label>
+          <label class="field">
+            <span>Zukan API Key</span>
+            <input id="api-key" name="apiKey" type="password" placeholder="zk_..." autocomplete="off" required>
+          </label>
+          <div class="actions">
+            <button id="save-button" type="submit">Validate and save</button>
+          </div>
+          <p id="status" class="status" aria-live="polite"></p>
+          <p id="meta" class="meta"></p>
+        </form>
+        <section class="notes">
+          <h2>Where to find the API key</h2>
+          <p>In Zukan, open your avatar menu, go to Settings, then create or rotate your API key.</p>
+          <p>The first release always saves as <strong>private</strong> and does not prompt for album or tags.</p>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
