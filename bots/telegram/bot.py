@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from urllib.parse import urlparse, unquote
 
 import httpx
@@ -8,6 +9,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ZUKAN_BASE_URL = os.environ["ZUKAN_BASE_URL"].rstrip("/")
@@ -230,6 +233,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             assets = await resolve_cobalt(client, tweet_url)
 
             total_accepted = total_duplicate = total_failed = 0
+            failure_reasons: list[str] = []
 
             for asset in assets:
                 try:
@@ -239,6 +243,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     total_failed += f
                 except Exception as exc:
                     total_failed += 1
+                    logger.exception("Failed to process asset from Cobalt: %s", asset.get("url", "unknown-url"))
+                    failure_reasons.append(str(exc))
 
             parts = []
             if total_accepted:
@@ -247,6 +253,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 parts.append(f"{total_duplicate} duplicate")
             if total_failed:
                 parts.append(f"{total_failed} failed")
+            if failure_reasons:
+                first_reason = failure_reasons[0]
+                if len(first_reason) > 180:
+                    first_reason = first_reason[:177] + "..."
+                parts.append(f"reason: {first_reason}")
 
             await update.message.reply_text(", ".join(parts) if parts else "No media found.")
 
