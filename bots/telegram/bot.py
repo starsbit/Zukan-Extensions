@@ -13,6 +13,9 @@ TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ZUKAN_BASE_URL = os.environ["ZUKAN_BASE_URL"].rstrip("/")
 ZUKAN_TOKEN = os.environ["ZUKAN_TOKEN"]
 COBALT_BASE_URL = os.environ.get("COBALT_BASE_URL", "https://api.cobalt.tools").rstrip("/")
+COBALT_AUTH_TOKEN = os.environ.get("COBALT_AUTH_TOKEN", "").strip()
+COBALT_AUTH_HEADER = os.environ.get("COBALT_AUTH_HEADER", "Authorization").strip() or "Authorization"
+COBALT_AUTH_SCHEME = os.environ.get("COBALT_AUTH_SCHEME", "Bearer").strip()
 DEFAULT_VISIBILITY = os.environ.get("DEFAULT_VISIBILITY", "private")
 ALLOWED_TELEGRAM_USER_ID = int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
@@ -104,10 +107,16 @@ def _summarize(results: list[dict]) -> tuple[int, int, int]:
 
 
 async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict]:
+    cobalt_headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if COBALT_AUTH_TOKEN:
+        cobalt_headers[COBALT_AUTH_HEADER] = (
+            f"{COBALT_AUTH_SCHEME} {COBALT_AUTH_TOKEN}" if COBALT_AUTH_SCHEME else COBALT_AUTH_TOKEN
+        )
+
     resp = await client.post(
         f"{COBALT_BASE_URL}/",
         json={"url": tweet_url, "downloadMode": "auto", "filenameStyle": "basic"},
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        headers=cobalt_headers,
         timeout=30.0,
     )
     try:
@@ -117,6 +126,10 @@ async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict
 
     if not resp.is_success:
         code = payload.get("error", {}).get("code", f"http_{resp.status_code}")
+        if code == "error.api.auth.jwt.missing":
+            raise ValueError(
+                "Cobalt requires authentication. Set COBALT_AUTH_TOKEN (and optionally COBALT_AUTH_HEADER/COBALT_AUTH_SCHEME)."
+            )
         raise ValueError(f"Cobalt error: {code}")
 
     status = payload.get("status")

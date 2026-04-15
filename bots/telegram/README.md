@@ -21,6 +21,9 @@ ALLOWED_TELEGRAM_USER_ID=   # numeric Telegram user id allowed to use this bot
 ZUKAN_BASE_URL=       # e.g. https://zukan.example.com
 ZUKAN_TOKEN=          # Bearer token for the Zukan API
 COBALT_BASE_URL=https://api.cobalt.tools   # leave as-is unless self-hosting Cobalt
+COBALT_AUTH_TOKEN=                         # optional; required if your Cobalt requires auth
+COBALT_AUTH_HEADER=Authorization           # optional
+COBALT_AUTH_SCHEME=Bearer                  # optional; blank means send raw token
 DEFAULT_VISIBILITY=private
 ```
 
