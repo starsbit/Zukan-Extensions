@@ -13,6 +13,7 @@ const EXTENSION_BY_CONTENT_TYPE = {
 const FALLBACK_INGEST_STATUSES = new Set([400, 403, 404, 415, 422, 502]);
 
 export const DEFAULT_COBALT_BASE_URL = 'https://api.cobalt.tools/';
+export const DEFAULT_MEDIA_VISIBILITY = 'private';
 
 function safeDecodeURIComponent(value) {
   try {
@@ -50,6 +51,14 @@ export function normalizeBaseUrl(value) {
 
 export function normalizeOptionalBaseUrl(value, fallback = DEFAULT_COBALT_BASE_URL) {
   return normalizeBaseUrl((value || fallback).trim());
+}
+
+export function normalizeMediaVisibility(value, fallback = DEFAULT_MEDIA_VISIBILITY) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'public' || normalized === 'private') {
+    return normalized;
+  }
+  return fallback;
 }
 
 export function originPatternFromUrl(value) {

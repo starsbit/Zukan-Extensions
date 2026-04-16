@@ -20,8 +20,12 @@ COBALT_BASE_URL = os.environ.get("COBALT_BASE_URL", "https://api.cobalt.tools").
 COBALT_AUTH_TOKEN = os.environ.get("COBALT_AUTH_TOKEN", "").strip()
 COBALT_AUTH_HEADER = os.environ.get("COBALT_AUTH_HEADER", "Authorization").strip() or "Authorization"
 COBALT_AUTH_SCHEME = os.environ.get("COBALT_AUTH_SCHEME", "Bearer").strip()
-DEFAULT_VISIBILITY = os.environ.get("DEFAULT_VISIBILITY", "private")
+DEFAULT_VISIBILITY = os.environ.get("DEFAULT_VISIBILITY", "private").strip().lower() or "private"
 ALLOWED_TELEGRAM_USER_ID = int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
+
+if DEFAULT_VISIBILITY not in {"private", "public"}:
+    logger.warning("Invalid DEFAULT_VISIBILITY=%s. Falling back to private.", DEFAULT_VISIBILITY)
+    DEFAULT_VISIBILITY = "private"
 
 TWEET_RE = re.compile(
     r"https?://(?:x|twitter)\.com/([^/?\s]+)/status/(\d+)",

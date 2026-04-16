@@ -1,10 +1,12 @@
 import {
   buildApiUrl,
   createAuthHeaders,
+  DEFAULT_MEDIA_VISIBILITY,
   deriveFilename,
   isHttpUrl,
   isSupportedContextType,
   normalizeBaseUrl,
+  normalizeMediaVisibility,
   originPatternFromUrl,
   shouldFallbackFromIngest,
   summarizeBatchResult,
@@ -21,7 +23,7 @@ function apiJson(path, apiKey, init = {}, baseUrl) {
 }
 
 function getConfig() {
-  return chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt']);
+  return chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt', 'mediaVisibility']);
 }
 
 async function updateActionState() {
@@ -80,7 +82,7 @@ async function parseJsonResponse(response) {
   }
 }
 
-async function ingestUrl({ srcUrl, apiKey, baseUrl }) {
+async function ingestUrl({ srcUrl, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY }) {
   const response = await apiJson(
     '/api/v1/media/ingest-url',
     apiKey,
@@ -89,7 +91,7 @@ async function ingestUrl({ srcUrl, apiKey, baseUrl }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: srcUrl,
-        visibility: 'private',
+        visibility,
       }),
     },
     baseUrl,
@@ -112,10 +114,10 @@ async function fetchMediaBlob(srcUrl) {
   return { blob, filename };
 }
 
-async function uploadBlob({ blob, filename, apiKey, baseUrl }) {
+async function uploadBlob({ blob, filename, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY }) {
   const formData = new FormData();
   formData.append('files', blob, filename);
-  formData.append('visibility', 'private');
+  formData.append('visibility', visibility);
   const response = await apiJson(
     '/api/v1/media',
     apiKey,
@@ -148,7 +150,8 @@ async function handleSaveClick(info) {
     return;
   }
 
-  const { baseUrl, apiKey } = await getConfig();
+  const { baseUrl, apiKey, mediaVisibility } = await getConfig();
+  const normalizedVisibility = normalizeMediaVisibility(mediaVisibility, DEFAULT_MEDIA_VISIBILITY);
   if (!baseUrl || !apiKey) {
     await updateActionState();
     await openSetup('Open the extension options and add your Zukan URL and API key.');
@@ -171,7 +174,7 @@ async function handleSaveClick(info) {
     return;
   }
 
-  const { response: ingestResponse, payload: ingestPayload } = await ingestUrl({ srcUrl: info.srcUrl, apiKey, baseUrl });
+  const { response: ingestResponse, payload: ingestPayload } = await ingestUrl({ srcUrl: info.srcUrl, apiKey, baseUrl, visibility: normalizedVisibility });
   if (ingestResponse.ok) {
     await notifyBatchResult(ingestPayload);
     return;
@@ -197,7 +200,7 @@ async function handleSaveClick(info) {
   }
 
   const { blob, filename } = await fetchMediaBlob(info.srcUrl);
-  const { response: uploadResponse, payload: uploadPayload } = await uploadBlob({ blob, filename, apiKey, baseUrl });
+  const { response: uploadResponse, payload: uploadPayload } = await uploadBlob({ blob, filename, apiKey, baseUrl, visibility: normalizedVisibility });
   if (uploadResponse.ok) {
     await notifyBatchResult(uploadPayload);
     return;

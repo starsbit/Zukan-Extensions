@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   deriveFilename,
   normalizeBaseUrl,
+  normalizeMediaVisibility,
   originPatternFromUrl,
   shouldFallbackFromIngest,
   summarizeBatchResult,
@@ -18,6 +19,13 @@ test('normalizeBaseUrl trims path/query/hash noise', () => {
 
 test('originPatternFromUrl converts a server URL into a Chrome origin pattern', () => {
   assert.equal(originPatternFromUrl('https://example.com/zukan'), 'https://example.com/*');
+});
+
+test('normalizeMediaVisibility only accepts private or public', () => {
+  assert.equal(normalizeMediaVisibility('private'), 'private');
+  assert.equal(normalizeMediaVisibility('public'), 'public');
+  assert.equal(normalizeMediaVisibility('PUBLIC'), 'public');
+  assert.equal(normalizeMediaVisibility('friends-only'), 'private');
 });
 
 test('deriveFilename prefers content-disposition and appends a missing extension', () => {

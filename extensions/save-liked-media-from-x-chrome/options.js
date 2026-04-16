@@ -2,7 +2,9 @@ import {
   buildApiUrl,
   createAuthHeaders,
   DEFAULT_COBALT_BASE_URL,
+  DEFAULT_MEDIA_VISIBILITY,
   normalizeBaseUrl,
+  normalizeMediaVisibility,
   normalizeOptionalBaseUrl,
   originPatternFromUrl,
 } from './helpers.js';
@@ -11,6 +13,7 @@ const form = document.querySelector('#options-form');
 const baseUrlInput = document.querySelector('#base-url');
 const apiKeyInput = document.querySelector('#api-key');
 const cobaltBaseUrlInput = document.querySelector('#cobalt-base-url');
+const mediaVisibilityInput = document.querySelector('#media-visibility');
 const statusElement = document.querySelector('#status');
 const metaElement = document.querySelector('#meta');
 const saveButton = document.querySelector('#save-button');
@@ -32,7 +35,7 @@ function formatTimestamp(value) {
 }
 
 async function loadSavedConfig() {
-  const stored = await chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt', 'cobaltBaseUrl']);
+  const stored = await chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt', 'cobaltBaseUrl', 'mediaVisibility']);
   if (stored.baseUrl) {
     baseUrlInput.value = stored.baseUrl;
   }
@@ -40,6 +43,7 @@ async function loadSavedConfig() {
     apiKeyInput.value = stored.apiKey;
   }
   cobaltBaseUrlInput.value = stored.cobaltBaseUrl || DEFAULT_COBALT_BASE_URL;
+  mediaVisibilityInput.value = normalizeMediaVisibility(stored.mediaVisibility, DEFAULT_MEDIA_VISIBILITY);
   if (stored.validatedAt || stored.lastUser) {
     const parts = [];
     if (stored.lastUser) {
@@ -62,6 +66,7 @@ async function validateAndSave(event) {
     const baseUrl = normalizeBaseUrl(baseUrlInput.value);
     const apiKey = apiKeyInput.value.trim();
     const cobaltBaseUrl = normalizeOptionalBaseUrl(cobaltBaseUrlInput.value, DEFAULT_COBALT_BASE_URL);
+    const mediaVisibility = normalizeMediaVisibility(mediaVisibilityInput.value, DEFAULT_MEDIA_VISIBILITY);
     if (!apiKey) {
       throw new Error('Enter your Zukan API key.');
     }
@@ -86,6 +91,7 @@ async function validateAndSave(event) {
       baseUrl,
       apiKey,
       cobaltBaseUrl,
+      mediaVisibility,
       lastUser: payload.username,
       validatedAt,
     });

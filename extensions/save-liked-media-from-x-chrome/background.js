@@ -2,8 +2,10 @@ import {
   buildApiUrl,
   createAuthHeaders,
   DEFAULT_COBALT_BASE_URL,
+  DEFAULT_MEDIA_VISIBILITY,
   deriveFilename,
   normalizeBaseUrl,
+  normalizeMediaVisibility,
   normalizeOptionalBaseUrl,
   originPatternFromUrl,
 } from './helpers.js';
@@ -64,7 +66,7 @@ async function apiJson(path, apiKey, init = {}, baseUrl) {
 }
 
 function getConfig() {
-  return chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt', 'cobaltBaseUrl']);
+  return chrome.storage.sync.get(['baseUrl', 'apiKey', 'lastUser', 'validatedAt', 'cobaltBaseUrl', 'mediaVisibility']);
 }
 
 async function updateActionState() {
@@ -115,8 +117,8 @@ async function parseJsonResponse(response) {
   }
 }
 
-async function ingestUrl({ srcUrl, apiKey, baseUrl, capturedAt = null }) {
-  debugLog('Attempting ingest-url save', { srcUrl, baseUrl, capturedAt });
+async function ingestUrl({ srcUrl, apiKey, baseUrl, capturedAt = null, visibility = DEFAULT_MEDIA_VISIBILITY }) {
+  debugLog('Attempting ingest-url save', { srcUrl, baseUrl, capturedAt, visibility });
   const response = await apiJson(
     '/api/v1/media/ingest-url',
     apiKey,
@@ -126,7 +128,7 @@ async function ingestUrl({ srcUrl, apiKey, baseUrl, capturedAt = null }) {
       body: JSON.stringify({
         url: srcUrl,
         captured_at: capturedAt,
-        visibility: 'private',
+        visibility,
       }),
     },
     baseUrl,
@@ -151,17 +153,18 @@ async function fetchMediaBlob(srcUrl, preferredFilename = null) {
   return { blob, filename };
 }
 
-async function uploadBlob({ blob, filename, apiKey, baseUrl, capturedAt = null }) {
+async function uploadBlob({ blob, filename, apiKey, baseUrl, capturedAt = null, visibility = DEFAULT_MEDIA_VISIBILITY }) {
   debugLog('Uploading blob to Zukan', {
     filename,
     baseUrl,
     size: blob.size,
     type: blob.type || null,
     capturedAt,
+    visibility,
   });
   const formData = new FormData();
   formData.append('files', blob, filename);
-  formData.append('visibility', 'private');
+  formData.append('visibility', visibility);
   if (capturedAt) {
     formData.append('captured_at', capturedAt);
   }
@@ -210,7 +213,7 @@ async function resolveCobaltTweet(tweetUrl, cobaltBaseUrl) {
 }
 
 async function withValidatedConfig() {
-  const { baseUrl, apiKey, cobaltBaseUrl } = await getConfig();
+  const { baseUrl, apiKey, cobaltBaseUrl, mediaVisibility } = await getConfig();
   if (!baseUrl || !apiKey) {
     await updateActionState();
     throw new Error('Open the extension options and add your Zukan URL and API key.');
@@ -220,6 +223,7 @@ async function withValidatedConfig() {
     baseUrl: normalizeBaseUrl(baseUrl),
     apiKey: apiKey.trim(),
     cobaltBaseUrl: normalizeOptionalBaseUrl(cobaltBaseUrl || DEFAULT_COBALT_BASE_URL),
+    mediaVisibility: normalizeMediaVisibility(mediaVisibility, DEFAULT_MEDIA_VISIBILITY),
   };
 }
 

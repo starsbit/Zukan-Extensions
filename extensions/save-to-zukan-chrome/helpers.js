@@ -11,6 +11,7 @@ const EXTENSION_BY_CONTENT_TYPE = {
   'video/x-msvideo': 'avi',
 };
 const FALLBACK_INGEST_STATUSES = new Set([400, 403, 404, 415, 422, 502]);
+export const DEFAULT_MEDIA_VISIBILITY = 'private';
 
 function safeDecodeURIComponent(value) {
   try {
@@ -44,6 +45,14 @@ export function normalizeBaseUrl(value) {
   url.search = '';
   url.pathname = url.pathname.replace(/\/+$/, '');
   return url.toString();
+}
+
+export function normalizeMediaVisibility(value, fallback = DEFAULT_MEDIA_VISIBILITY) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'public' || normalized === 'private') {
+    return normalized;
+  }
+  return fallback;
 }
 
 export function originPatternFromUrl(value) {

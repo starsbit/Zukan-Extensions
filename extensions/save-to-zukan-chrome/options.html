@@ -21,6 +21,13 @@
             <span>Zukan API Key</span>
             <input id="api-key" name="apiKey" type="password" placeholder="zk_..." autocomplete="off" required>
           </label>
+          <label class="field">
+            <span>Upload visibility</span>
+            <select id="media-visibility" name="mediaVisibility">
+              <option value="private" selected>Private (default)</option>
+              <option value="public">Public</option>
+            </select>
+          </label>
           <div class="actions">
             <button id="save-button" type="submit">Validate and save</button>
           </div>
@@ -30,7 +37,7 @@
         <section class="notes">
           <h2>Where to find the API key</h2>
           <p>In Zukan, open your avatar menu, go to Settings, then create or rotate your API key.</p>
-          <p>The first release always saves as <strong>private</strong> and does not prompt for album or tags.</p>
+          <p>Media saves with your selected visibility (private by default) and does not prompt for album or tags.</p>
         </section>
       </section>
     </main>

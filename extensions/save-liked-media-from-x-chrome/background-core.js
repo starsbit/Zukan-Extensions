@@ -50,6 +50,7 @@ async function saveResolvedRemoteUrl(deps, candidate, config) {
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     capturedAt: candidate.capturedAt ?? null,
+    visibility: config.mediaVisibility,
   });
 
   if (ingestResponse.ok) {
@@ -68,6 +69,7 @@ async function saveResolvedRemoteUrl(deps, candidate, config) {
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     capturedAt: candidate.capturedAt ?? null,
+    visibility: config.mediaVisibility,
   });
 
   if (!uploadResponse.ok) {
@@ -92,6 +94,7 @@ async function saveViaCobalt(deps, candidate, config) {
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
       capturedAt: candidate.capturedAt ?? null,
+      visibility: config.mediaVisibility,
     });
     if (!response.ok) {
       throw new Error(parseApiError(payload, `Upload failed with ${response.status}.`));

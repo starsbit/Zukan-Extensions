@@ -24,7 +24,7 @@ COBALT_BASE_URL=https://api.cobalt.tools   # leave as-is unless self-hosting Cob
 COBALT_AUTH_TOKEN=                         # optional; required if your Cobalt requires auth
 COBALT_AUTH_HEADER=Authorization           # optional
 COBALT_AUTH_SCHEME=Bearer                  # optional; blank means send raw token
-DEFAULT_VISIBILITY=private
+DEFAULT_VISIBILITY=private                  # allowed: private or public
 ```
 
 ## Running with Docker (recommended)

@@ -26,6 +26,14 @@
             <input id="cobalt-base-url" name="cobaltBaseUrl" type="url" placeholder="https://api.cobalt.tools/" autocomplete="url">
             <small>Optional. Used as a best-effort fallback for X videos and GIFs.</small>
           </label>
+          <label class="field">
+            <span>Upload visibility</span>
+            <select id="media-visibility" name="mediaVisibility">
+              <option value="private" selected>Private (default)</option>
+              <option value="public">Public</option>
+            </select>
+            <small>Choose whether saved media should be private or public in Zukan.</small>
+          </label>
           <div class="actions">
             <button id="save-button" type="submit">Validate and save</button>
           </div>
@@ -34,7 +42,7 @@
         </form>
         <section class="notes">
           <h2>How it works</h2>
-          <p>When you click Like on X/Twitter, the extension tries to save the tweet media to Zukan as <strong>private</strong>.</p>
+          <p>When you click Like on X/Twitter, the extension saves tweet media using your selected visibility.</p>
           <p>While viewing your Likes tab, click the extension button to run a backfill scan for older liked tweets.</p>
         </section>
       </section>

@@ -7,6 +7,7 @@ import {
   deriveFilename,
   normalizeOptionalBaseUrl,
   normalizeBaseUrl,
+  normalizeMediaVisibility,
   originPatternFromUrl,
   shouldFallbackFromIngest,
   summarizeBatchResults,
@@ -21,6 +22,13 @@ test('normalizeBaseUrl trims path/query/hash noise', () => {
 
 test('normalizeOptionalBaseUrl falls back to the default cobalt instance', () => {
   assert.equal(normalizeOptionalBaseUrl('', DEFAULT_COBALT_BASE_URL), 'https://api.cobalt.tools/');
+});
+
+test('normalizeMediaVisibility only accepts private or public', () => {
+  assert.equal(normalizeMediaVisibility('private'), 'private');
+  assert.equal(normalizeMediaVisibility('public'), 'public');
+  assert.equal(normalizeMediaVisibility('PUBLIC'), 'public');
+  assert.equal(normalizeMediaVisibility('friends-only'), 'private');
 });
 
 test('originPatternFromUrl converts a server URL into a Chrome origin pattern', () => {
