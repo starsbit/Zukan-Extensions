@@ -166,6 +166,7 @@ export function createXContentController({
   let syncStatus = null;
   let snoozeInput = null;
   let lastStatusMessage = '';
+  let duplicateSnoozeConfigured = 0;
   let duplicateSnoozeRemaining = 0;
 
   function debugLog(message, details = null) {
@@ -234,8 +235,8 @@ export function createXContentController({
     }
 
     setStatus(
-      duplicateSnoozeRemaining > 0
-        ? `Scan your Likes timeline. ${duplicateSnoozeRemaining} duplicate prompt${duplicateSnoozeRemaining === 1 ? '' : 's'} currently snoozed.`
+      duplicateSnoozeConfigured > 0
+        ? `Scan your Likes timeline. Warnings pause for ${duplicateSnoozeConfigured} duplicate${duplicateSnoozeConfigured === 1 ? '' : 's'} each time.`
         : 'Scan your Likes timeline and keep going when duplicates appear.',
       'neutral',
     );
@@ -358,9 +359,13 @@ export function createXContentController({
     });
     snoozeInput.addEventListener('change', () => {
       const value = Number.parseInt(snoozeInput.value, 10);
-      duplicateSnoozeRemaining = Number.isFinite(value) && value > 0 ? value : 0;
-      snoozeInput.value = String(duplicateSnoozeRemaining);
-      debugLog('Updated duplicate prompt snooze', { duplicateSnoozeRemaining });
+      duplicateSnoozeConfigured = Number.isFinite(value) && value > 0 ? value : 0;
+      duplicateSnoozeRemaining = duplicateSnoozeConfigured;
+      snoozeInput.value = String(duplicateSnoozeConfigured);
+      debugLog('Updated duplicate prompt snooze', {
+        duplicateSnoozeConfigured,
+        duplicateSnoozeRemaining,
+      });
       updateSyncButtonState();
     });
 
@@ -483,9 +488,11 @@ export function createXContentController({
     }
 
     debugLog('Starting manual likes scan', {
+      duplicateSnoozeConfigured,
       duplicateSnoozeRemaining,
       location: windowObject.location?.href || '',
     });
+    duplicateSnoozeRemaining = duplicateSnoozeConfigured;
     manualScanRunning = true;
     ensureSyncSurface();
     updateSyncButtonState();
@@ -528,14 +535,17 @@ export function createXContentController({
           if (result?.duplicateFound) {
             debugLog('Duplicate detected while scanning', {
               tweetIndex: processedTweets,
+              duplicateSnoozeConfigured,
               duplicateSnoozeRemaining,
             });
             if (duplicateSnoozeRemaining > 0) {
               duplicateSnoozeRemaining -= 1;
-              if (snoozeInput) {
-                snoozeInput.value = String(duplicateSnoozeRemaining);
-              }
-              setStatus(`Duplicate skipped automatically. ${duplicateSnoozeRemaining} snoozed duplicate prompt${duplicateSnoozeRemaining === 1 ? '' : 's'} left.`, 'warning');
+              setStatus(
+                duplicateSnoozeConfigured > 0
+                  ? `Duplicate skipped automatically. ${duplicateSnoozeRemaining} duplicate${duplicateSnoozeRemaining === 1 ? '' : 's'} left before the next warning.`
+                  : 'Duplicate skipped automatically.',
+                'warning',
+              );
               continue;
             }
 
@@ -547,8 +557,18 @@ export function createXContentController({
               debugLog('User stopped manual scan at duplicate', { tweetIndex: processedTweets });
               return { started: true, stoppedAfterDuplicate: true };
             }
-            debugLog('User chose to continue after duplicate', { tweetIndex: processedTweets });
-            setStatus('Duplicate skipped. Continuing to older likes...', 'info');
+            duplicateSnoozeRemaining = duplicateSnoozeConfigured;
+            debugLog('User chose to continue after duplicate', {
+              tweetIndex: processedTweets,
+              duplicateSnoozeConfigured,
+              duplicateSnoozeRemaining,
+            });
+            setStatus(
+              duplicateSnoozeConfigured > 0
+                ? `Duplicate skipped. Continuing, with warnings again after ${duplicateSnoozeConfigured} more duplicate${duplicateSnoozeConfigured === 1 ? '' : 's'}.`
+                : 'Duplicate skipped. Continuing to older likes...',
+              'info',
+            );
           }
         }
 
