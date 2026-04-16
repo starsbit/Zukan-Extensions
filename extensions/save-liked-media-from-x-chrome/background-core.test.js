@@ -134,6 +134,62 @@ test('saveTweetMedia uploads cobalt-resolved assets', async () => {
   assert.deepEqual(result.summary, { accepted: 1, duplicate: 0, failed: 0 });
 });
 
+test('saveTweetMedia prefers cobalt video and skips direct video once cobalt succeeds', async () => {
+  let ingestCalls = 0;
+  let uploaded = 0;
+
+  const result = await saveTweetMedia({
+    ingestUrl: async () => {
+      ingestCalls += 1;
+      return {
+        response: { ok: true },
+        payload: { results: [{ status: 'accepted' }] },
+      };
+    },
+    uploadBlob: async () => {
+      uploaded += 1;
+      return {
+        response: { ok: true },
+        payload: { results: [{ status: 'accepted' }] },
+      };
+    },
+    fetchMediaBlob: async () => ({
+      blob: new Blob(['gif-bytes']),
+      filename: 'tweet.gif',
+    }),
+    ensureOriginPermission: async () => true,
+    resolveCobaltTweet: async () => ({
+      status: 'redirect',
+      url: 'https://cobalt.example/download.gif',
+      filename: 'tweet.gif',
+    }),
+  }, {
+    baseUrl: 'https://zukan.example',
+    apiKey: 'zk_123',
+    cobaltBaseUrl: 'https://api.cobalt.tools',
+  }, {
+    mediaCandidates: [
+      {
+        mediaType: 'video',
+        strategy: 'direct',
+        url: 'https://video.twimg.com/ext_tw_video/123/pu/vid/avc1/clip.mp4',
+        key: 'direct-video',
+      },
+      {
+        mediaType: 'video',
+        strategy: 'cobalt',
+        tweetUrl: 'https://x.com/demo/status/123',
+        key: 'cobalt-video',
+      },
+    ],
+  });
+
+  assert.equal(uploaded, 1);
+  assert.equal(ingestCalls, 0);
+  assert.equal(result.hasFailure, false);
+  assert.deepEqual(result.summary, { accepted: 1, duplicate: 0, failed: 0 });
+});
+
 test('saveTweetMedia times out stalled manual video saves and keeps reporting failure', async () => {
   const result = await saveTweetMedia({
     ingestUrl: async () => new Promise(() => {}),

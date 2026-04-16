@@ -105,12 +105,25 @@ async function saveViaCobalt(deps, candidate, config) {
   return summary;
 }
 
+function sortMediaCandidates(candidates = []) {
+  return [...candidates].sort((left, right) => {
+    const leftPriority = left?.mediaType === 'video' && left?.strategy === 'cobalt' ? 0 : 1;
+    const rightPriority = right?.mediaType === 'video' && right?.strategy === 'cobalt' ? 0 : 1;
+    return leftPriority - rightPriority;
+  });
+}
+
 export async function saveTweetMedia(deps, config, request) {
   const aggregate = { accepted: 0, duplicate: 0, failed: 0 };
   const failures = [];
   const candidateTimeoutMs = request.mode === 'manual' ? 30000 : 45000;
+  let videoHandledByCobalt = false;
 
-  for (const candidate of request.mediaCandidates) {
+  for (const candidate of sortMediaCandidates(request.mediaCandidates)) {
+    if (videoHandledByCobalt && candidate.mediaType === 'video' && candidate.strategy === 'direct') {
+      continue;
+    }
+
     try {
       const result = await withTimeout(
         candidate.strategy === 'cobalt'
@@ -122,6 +135,9 @@ export async function saveTweetMedia(deps, config, request) {
       aggregate.accepted += result.accepted;
       aggregate.duplicate += result.duplicate;
       aggregate.failed += result.failed;
+      if (candidate.mediaType === 'video' && candidate.strategy === 'cobalt' && (result.accepted > 0 || result.duplicate > 0)) {
+        videoHandledByCobalt = true;
+      }
     } catch (error) {
       aggregate.failed += 1;
       failures.push(error instanceof Error ? error.message : 'Unexpected media save failure.');
