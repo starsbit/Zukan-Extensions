@@ -194,6 +194,24 @@ export function summarizeBatchResults(payload) {
   return summary;
 }
 
+export function rebaseCobaltAssetUrl(assetUrl, cobaltBaseUrl) {
+  try {
+    const asset = new URL(assetUrl);
+    const cobalt = new URL(cobaltBaseUrl);
+    if (asset.origin === cobalt.origin) return assetUrl;
+    // Only rebase private/loopback IPs — public CDN redirect URLs must stay unchanged.
+    if (!/^(?:10|127|169\.254|172\.(?:1[6-9]|2\d|3[01])|192\.168)\./.test(asset.hostname)) {
+      return assetUrl;
+    }
+    asset.protocol = cobalt.protocol;
+    asset.hostname = cobalt.hostname;
+    asset.port = cobalt.port;
+    return asset.toString();
+  } catch {
+    return assetUrl;
+  }
+}
+
 export function describeCobaltError(payload) {
   if (payload?.status === 'error' && payload.error?.code) {
     return `Cobalt error: ${payload.error.code}.`;

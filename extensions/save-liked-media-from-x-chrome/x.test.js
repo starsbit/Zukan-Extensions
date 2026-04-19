@@ -108,3 +108,24 @@ test('extractMediaCandidatesFromArticle prefers direct video urls when present',
   assert.equal(candidates[0].strategy, 'direct');
   assert.equal(candidates[0].url, 'https://video.twimg.com/ext_tw_video/123/pu/vid/avc1/clip.mp4');
 });
+
+test('extractMediaCandidatesFromArticle routes tweet_video gifs through cobalt gif candidate only', () => {
+  const article = fakeArticle({
+    'img[src]': [],
+    'video[src], video source[src]': [
+      fakeNode({ src: 'https://video.twimg.com/tweet_video/HGKxUrkbQAAj9qf.mp4' }),
+    ],
+    '[data-testid="videoPlayer"], video, [aria-label*="Embedded video"]': fakeNode(),
+  });
+
+  const candidates = extractMediaCandidatesFromArticle(article, 'https://x.com/ppodol0905/status/2045396917987791271', '2026-04-18T07:00:01.000Z');
+  assert.deepEqual(candidates, [
+    {
+      mediaType: 'gif',
+      strategy: 'cobalt',
+      tweetUrl: 'https://x.com/ppodol0905/status/2045396917987791271',
+      capturedAt: '2026-04-18T07:00:01.000Z',
+      key: 'gif-cobalt:https://x.com/ppodol0905/status/2045396917987791271',
+    },
+  ]);
+});

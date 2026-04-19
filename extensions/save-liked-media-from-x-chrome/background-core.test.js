@@ -93,23 +93,22 @@ test('saveTweetMedia returns combined duplicate and accepted counts for multi-me
   assert.deepEqual(result.summary, { accepted: 1, duplicate: 1, failed: 0 });
 });
 
-test('saveTweetMedia uploads cobalt-resolved assets', async () => {
-  let uploaded = 0;
+test('saveTweetMedia uploads cobalt-resolved assets via ingest-url', async () => {
+  let ingestCalls = 0;
   const result = await saveTweetMedia({
     ingestUrl: async () => {
-      throw new Error('should not ingest cobalt fallback urls');
-    },
-    uploadBlob: async () => {
-      uploaded += 1;
+      ingestCalls += 1;
       return {
         response: { ok: true },
         payload: { results: [{ status: 'accepted' }] },
       };
     },
-    fetchMediaBlob: async () => ({
-      blob: new Blob(['video']),
-      filename: 'tweet.mp4',
-    }),
+    uploadBlob: async () => {
+      throw new Error('should not upload when ingest succeeds');
+    },
+    fetchMediaBlob: async () => {
+      throw new Error('should not fetch when ingest succeeds');
+    },
     ensureOriginPermission: async () => true,
     resolveCobaltTweet: async () => ({
       status: 'redirect',
@@ -126,6 +125,48 @@ test('saveTweetMedia uploads cobalt-resolved assets', async () => {
       strategy: 'cobalt',
       tweetUrl: 'https://x.com/demo/status/123',
       key: 'two',
+    }],
+  });
+
+  assert.equal(ingestCalls, 1);
+  assert.equal(result.hasFailure, false);
+  assert.deepEqual(result.summary, { accepted: 1, duplicate: 0, failed: 0 });
+});
+
+test('saveTweetMedia falls back to blob upload when cobalt ingest fails', async () => {
+  let uploaded = 0;
+  const result = await saveTweetMedia({
+    ingestUrl: async () => ({
+      response: { ok: false, status: 415 },
+      payload: {},
+    }),
+    uploadBlob: async () => {
+      uploaded += 1;
+      return {
+        response: { ok: true },
+        payload: { results: [{ status: 'accepted' }] },
+      };
+    },
+    fetchMediaBlob: async () => ({
+      blob: new Blob(['gif-bytes']),
+      filename: 'tweet.gif',
+    }),
+    ensureOriginPermission: async () => true,
+    resolveCobaltTweet: async () => ({
+      status: 'redirect',
+      url: 'https://cobalt.example/download.gif',
+      filename: 'tweet.gif',
+    }),
+  }, {
+    baseUrl: 'https://zukan.example',
+    apiKey: 'zk_123',
+    cobaltBaseUrl: 'https://api.cobalt.tools',
+  }, {
+    mediaCandidates: [{
+      mediaType: 'video',
+      strategy: 'cobalt',
+      tweetUrl: 'https://x.com/demo/status/123',
+      key: 'cobalt',
     }],
   });
 
@@ -184,8 +225,8 @@ test('saveTweetMedia prefers cobalt video and skips direct video once cobalt suc
     ],
   });
 
-  assert.equal(uploaded, 1);
-  assert.equal(ingestCalls, 0);
+  assert.equal(ingestCalls, 1);
+  assert.equal(uploaded, 0);
   assert.equal(result.hasFailure, false);
   assert.deepEqual(result.summary, { accepted: 1, duplicate: 0, failed: 0 });
 });

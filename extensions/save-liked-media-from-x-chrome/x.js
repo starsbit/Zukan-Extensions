@@ -61,6 +61,17 @@ function directVideoUrl(value) {
   }
 }
 
+function isLikelyXGifVideoUrl(value) {
+  const absolute = toAbsoluteUrl(value);
+  if (!absolute) return false;
+  try {
+    const url = new URL(absolute);
+    return /video\.twimg\.com$/i.test(url.hostname) && /\/tweet_video\//i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function uniqueBy(items, keyFn) {
   const output = [];
   const seen = new Set();
@@ -109,9 +120,14 @@ export function extractMediaCandidatesFromArticle(article, tweetUrl, capturedAt 
       key: `image:${url}`,
     }));
 
-  const directVideoCandidates = Array.from(article.querySelectorAll('video[src], video source[src]'))
+  const rawVideoUrls = Array.from(article.querySelectorAll('video[src], video source[src]'))
     .map((node) => directVideoUrl(node.getAttribute('src')))
-    .filter(Boolean)
+    .filter(Boolean);
+
+  const hasLikelyGifVideo = rawVideoUrls.some((url) => isLikelyXGifVideoUrl(url));
+
+  const directVideoCandidates = rawVideoUrls
+    .filter((url) => !isLikelyXGifVideoUrl(url))
     .map((url) => ({
       mediaType: 'video',
       strategy: 'direct',
@@ -120,10 +136,20 @@ export function extractMediaCandidatesFromArticle(article, tweetUrl, capturedAt 
       key: `video:${url}`,
     }));
 
+  const gifCandidates = hasLikelyGifVideo && tweetUrl
+    ? [{
+        mediaType: 'gif',
+        strategy: 'cobalt',
+        tweetUrl,
+        capturedAt,
+        key: `gif-cobalt:${tweetUrl}`,
+      }]
+    : [];
+
   const hasVideoShell = Boolean(
     article.querySelector('[data-testid="videoPlayer"], video, [aria-label*="Embedded video"]'),
   );
-  const fallbackCandidate = hasVideoShell && tweetUrl
+  const fallbackCandidate = hasVideoShell && tweetUrl && !hasLikelyGifVideo
     ? [{
         mediaType: 'video',
         strategy: 'cobalt',
@@ -134,7 +160,7 @@ export function extractMediaCandidatesFromArticle(article, tweetUrl, capturedAt 
     : [];
 
   return uniqueBy(
-    [...imageCandidates, ...directVideoCandidates, ...fallbackCandidate],
+    [...imageCandidates, ...directVideoCandidates, ...gifCandidates, ...fallbackCandidate],
     (candidate) => candidate.key,
   );
 }

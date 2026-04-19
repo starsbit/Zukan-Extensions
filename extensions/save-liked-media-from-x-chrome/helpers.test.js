@@ -9,6 +9,7 @@ import {
   normalizeBaseUrl,
   normalizeMediaVisibility,
   originPatternFromUrl,
+  rebaseCobaltAssetUrl,
   shouldFallbackFromIngest,
   summarizeBatchResults,
 } from './helpers.js';
@@ -63,4 +64,24 @@ test('summarizeBatchResults counts accepted duplicate and failed items', () => {
     summarizeBatchResults({ results: [{ status: 'accepted' }, { status: 'duplicate' }, { status: 'error' }] }),
     { accepted: 1, duplicate: 1, failed: 1 },
   );
+});
+
+test('rebaseCobaltAssetUrl replaces private IP origin with configured cobalt hostname', () => {
+  assert.equal(
+    rebaseCobaltAssetUrl(
+      'http://192.168.178.102:9000/tunnel?id=abc&sig=xyz',
+      'http://cobalt.home.arpa/',
+    ),
+    'http://cobalt.home.arpa/tunnel?id=abc&sig=xyz',
+  );
+});
+
+test('rebaseCobaltAssetUrl leaves public CDN redirect URLs unchanged', () => {
+  const cdnUrl = 'https://video.twimg.com/ext_tw_video/123/pu/vid/clip.mp4';
+  assert.equal(rebaseCobaltAssetUrl(cdnUrl, 'http://cobalt.home.arpa/'), cdnUrl);
+});
+
+test('rebaseCobaltAssetUrl is a no-op when origins already match', () => {
+  const url = 'http://cobalt.home.arpa/tunnel?id=abc';
+  assert.equal(rebaseCobaltAssetUrl(url, 'http://cobalt.home.arpa/'), url);
 });

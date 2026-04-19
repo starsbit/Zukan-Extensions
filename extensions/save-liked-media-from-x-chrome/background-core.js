@@ -1,7 +1,7 @@
 import {
   describeCobaltError,
-  deriveFilename,
   isHttpUrl,
+  rebaseCobaltAssetUrl,
   shouldFallbackFromIngest,
   summarizeBatchResult,
   summarizeBatchResults,
@@ -86,20 +86,12 @@ async function saveViaCobalt(deps, candidate, config) {
   const summary = { accepted: 0, duplicate: 0, failed: 0 };
 
   for (const asset of assets) {
-    await deps.ensureOriginPermission(asset.url);
-    const { blob, filename } = await deps.fetchMediaBlob(asset.url, asset.filename);
-    const { response, payload } = await deps.uploadBlob({
-      blob,
-      filename: filename || deriveFilename(asset.url),
-      apiKey: config.apiKey,
-      baseUrl: config.baseUrl,
+    const assetUrl = rebaseCobaltAssetUrl(asset.url, config.cobaltBaseUrl);
+    const itemSummary = await saveResolvedRemoteUrl(deps, {
+      url: assetUrl,
+      filename: asset.filename ?? null,
       capturedAt: candidate.capturedAt ?? null,
-      visibility: config.mediaVisibility,
-    });
-    if (!response.ok) {
-      throw new Error(parseApiError(payload, `Upload failed with ${response.status}.`));
-    }
-    const itemSummary = summarizeBatchResults(payload);
+    }, config);
     summary.accepted += itemSummary.accepted;
     summary.duplicate += itemSummary.duplicate;
     summary.failed += itemSummary.failed;
@@ -121,8 +113,14 @@ export async function saveTweetMedia(deps, config, request) {
   const failures = [];
   const candidateTimeoutMs = request.mode === 'manual' ? 30000 : 45000;
   let videoHandledByCobalt = false;
+  const hasCobaltGifCandidate = request.mediaCandidates?.some(
+    (candidate) => candidate?.mediaType === 'gif' && candidate?.strategy === 'cobalt',
+  );
 
   for (const candidate of sortMediaCandidates(request.mediaCandidates)) {
+    if (hasCobaltGifCandidate && candidate.mediaType === 'gif' && candidate.strategy === 'direct') {
+      continue;
+    }
     if (videoHandledByCobalt && candidate.mediaType === 'video' && candidate.strategy === 'direct') {
       continue;
     }
