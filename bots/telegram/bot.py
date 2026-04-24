@@ -165,6 +165,38 @@ def _summarize(results: list[dict]) -> tuple[int, int, int, list[str]]:
     return accepted, duplicate, failed, failure_reasons
 
 
+async def _apply_external_refs_to_results(
+    client: httpx.AsyncClient,
+    results: list[dict],
+    external_refs: list[dict[str, str]],
+    auth: dict[str, str],
+) -> None:
+    if not external_refs:
+        return
+
+    seen: set[str] = set()
+    for result in results:
+        media_id = result.get("id")
+        if result.get("status") not in {"accepted", "duplicate"} or not media_id or media_id in seen:
+            continue
+        seen.add(media_id)
+        try:
+            resp = await client.patch(
+                f"{ZUKAN_BASE_URL}/api/v1/media/{media_id}",
+                json={"external_refs": external_refs},
+                headers={**auth, "Content-Type": "application/json"},
+                timeout=30.0,
+            )
+            if not (200 <= resp.status_code < 300):
+                logger.warning(
+                    "Failed to apply Twitter external refs to media_id=%s status=%s",
+                    media_id,
+                    resp.status_code,
+                )
+        except Exception:
+            logger.exception("Failed to apply Twitter external refs to media_id=%s", media_id)
+
+
 def _cobalt_headers() -> dict[str, str]:
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     if COBALT_AUTH_TOKEN:
@@ -247,7 +279,9 @@ async def upload_asset(
         ingest_payload = {}
 
     if ingest_resp.status_code == 202:
-        return _summarize(ingest_payload.get("results", []))
+        results = ingest_payload.get("results", [])
+        await _apply_external_refs_to_results(client, results, external_refs, auth)
+        return _summarize(results)
 
     if not _should_fallback(ingest_resp.status_code, ingest_payload):
         detail = (ingest_payload.get("detail") or f"status {ingest_resp.status_code}")
@@ -266,6 +300,7 @@ async def upload_asset(
         files=[("files", (filename, media_resp.content, upload_content_type))],
         data={
             "visibility": DEFAULT_VISIBILITY,
+            **({"external_refs": json.dumps(external_refs)} if external_refs else {}),
             **({"external_refs_values": json.dumps(external_refs)} if external_refs else {}),
         },
         headers=auth,
@@ -277,7 +312,9 @@ async def upload_asset(
         upload_payload = {}
 
     if upload_resp.status_code == 202:
-        return _summarize(upload_payload.get("results", []))
+        results = upload_payload.get("results", [])
+        await _apply_external_refs_to_results(client, results, external_refs, auth)
+        return _summarize(results)
 
     detail = (upload_payload.get("detail") or f"status {upload_resp.status_code}")
     raise ValueError(f"Upload failed: {detail}")
