@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildExternalRefsFromContext,
   deriveFilename,
+  normalizeTweetPermalink,
   normalizeBaseUrl,
   normalizeMediaVisibility,
   originPatternFromUrl,
@@ -19,6 +21,26 @@ test('normalizeBaseUrl trims path/query/hash noise', () => {
 
 test('originPatternFromUrl converts a server URL into a Chrome origin pattern', () => {
   assert.equal(originPatternFromUrl('https://example.com/zukan'), 'https://example.com/*');
+});
+
+test('normalizeTweetPermalink reduces x photo urls to tweet permalinks', () => {
+  assert.equal(
+    normalizeTweetPermalink('https://twitter.com/starsbit/status/123/photo/1'),
+    'https://x.com/starsbit/status/123',
+  );
+});
+
+test('buildExternalRefsFromContext extracts twitter refs from the page url', () => {
+  assert.deepEqual(
+    buildExternalRefsFromContext({
+      pageUrl: 'https://x.com/starsbit/status/123/photo/1',
+    }),
+    [{
+      provider: 'twitter',
+      external_id: '123',
+      url: 'https://x.com/starsbit/status/123',
+    }],
+  );
 });
 
 test('normalizeMediaVisibility only accepts private or public', () => {

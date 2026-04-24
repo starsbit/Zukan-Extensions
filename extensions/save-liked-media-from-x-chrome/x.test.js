@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildTwitterExternalRef,
   extractMediaCandidatesFromArticle,
   extractTweetCapturedAt,
   isLikesTimelineUrl,
@@ -41,6 +42,17 @@ test('normalizeTweetPermalink reduces photo urls to the tweet permalink', () => 
   assert.equal(
     normalizeTweetPermalink('https://twitter.com/starsbit/status/123/photo/1'),
     'https://x.com/starsbit/status/123',
+  );
+});
+
+test('buildTwitterExternalRef derives provider metadata from a tweet permalink', () => {
+  assert.deepEqual(
+    buildTwitterExternalRef('https://twitter.com/starsbit/status/123/photo/1'),
+    {
+      provider: 'twitter',
+      external_id: '123',
+      url: 'https://x.com/starsbit/status/123',
+    },
   );
 });
 

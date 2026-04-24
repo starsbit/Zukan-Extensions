@@ -2,7 +2,7 @@
 
 Telegram bot that accepts Twitter/X tweet URLs and saves their media to a Zukan instance.
 
-**Flow:** tweet URL → Cobalt resolves media → Zukan `ingest-url` (server-side download) or direct upload fallback → reply with result summary.
+**Flow:** tweet URL → Cobalt resolves media → Zukan `ingest-url` with Twitter `external_refs` (server-side download) or direct upload fallback with the same metadata → reply with result summary.
 
 ## Prerequisites
 

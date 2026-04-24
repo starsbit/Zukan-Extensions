@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+import json
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 
@@ -65,6 +66,20 @@ def normalize_tweet_url(text: str) -> str | None:
     if not m:
         return None
     return f"https://x.com/{m.group(1)}/status/{m.group(2)}"
+
+
+def build_twitter_external_ref(tweet_url: str) -> dict[str, str] | None:
+    normalized = normalize_tweet_url(tweet_url)
+    if not normalized:
+        return None
+    match = TWEET_RE.search(normalized)
+    if not match:
+        return None
+    return {
+        "provider": "twitter",
+        "external_id": match.group(2),
+        "url": normalized,
+    }
 
 
 def _ext_from_content_type(content_type: str) -> str:
@@ -207,14 +222,22 @@ async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict
     raise ValueError(f"Unexpected Cobalt response: {status}")
 
 
-async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int, int, list[str]]:
+async def upload_asset(
+    client: httpx.AsyncClient,
+    asset: dict,
+    external_refs: list[dict[str, str]] | None = None,
+) -> tuple[int, int, int, list[str]]:
     url = asset["url"]
     preferred_filename = asset.get("filename")
     auth = {"Authorization": f"Bearer {ZUKAN_TOKEN}"}
+    external_refs = external_refs or []
+    ingest_payload = {"url": url, "visibility": DEFAULT_VISIBILITY, "captured_at": None}
+    if external_refs:
+        ingest_payload["external_refs"] = external_refs
 
     ingest_resp = await client.post(
         f"{ZUKAN_BASE_URL}/api/v1/media/ingest-url",
-        json={"url": url, "visibility": DEFAULT_VISIBILITY, "captured_at": None},
+        json=ingest_payload,
         headers={**auth, "Content-Type": "application/json"},
         timeout=60.0,
     )
@@ -241,7 +264,10 @@ async def upload_asset(client: httpx.AsyncClient, asset: dict) -> tuple[int, int
     upload_resp = await client.post(
         f"{ZUKAN_BASE_URL}/api/v1/media",
         files=[("files", (filename, media_resp.content, upload_content_type))],
-        data={"visibility": DEFAULT_VISIBILITY},
+        data={
+            "visibility": DEFAULT_VISIBILITY,
+            **({"external_refs": json.dumps(external_refs)} if external_refs else {}),
+        },
         headers=auth,
         timeout=120.0,
     )
@@ -273,13 +299,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         async with httpx.AsyncClient() as client:
             assets = await resolve_cobalt(client, tweet_url)
+            external_ref = build_twitter_external_ref(tweet_url)
+            external_refs = [external_ref] if external_ref else []
 
             total_accepted = total_duplicate = total_failed = 0
             failure_reasons: list[str] = []
 
             for asset in assets:
                 try:
-                    a, d, f, reasons = await upload_asset(client, asset)
+                    a, d, f, reasons = await upload_asset(client, asset, external_refs)
                     total_accepted += a
                     total_duplicate += d
                     total_failed += f

@@ -44,13 +44,14 @@ export function resolveCobaltAssets(payload) {
   throw new Error(describeCobaltError(payload));
 }
 
-async function saveResolvedRemoteUrl(deps, candidate, config) {
+async function saveResolvedRemoteUrl(deps, candidate, config, externalRefs = []) {
   const { response: ingestResponse, payload: ingestPayload } = await deps.ingestUrl({
     srcUrl: candidate.url,
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     capturedAt: candidate.capturedAt ?? null,
     visibility: config.mediaVisibility,
+    externalRefs,
   });
 
   if (ingestResponse.ok) {
@@ -70,6 +71,7 @@ async function saveResolvedRemoteUrl(deps, candidate, config) {
     baseUrl: config.baseUrl,
     capturedAt: candidate.capturedAt ?? null,
     visibility: config.mediaVisibility,
+    externalRefs,
   });
 
   if (!uploadResponse.ok) {
@@ -79,7 +81,7 @@ async function saveResolvedRemoteUrl(deps, candidate, config) {
   return summarizeBatchResults(uploadPayload);
 }
 
-async function saveViaCobalt(deps, candidate, config) {
+async function saveViaCobalt(deps, candidate, config, externalRefs = []) {
   await deps.ensureOriginPermission(config.cobaltBaseUrl);
   const cobaltPayload = await deps.resolveCobaltTweet(candidate.tweetUrl, config.cobaltBaseUrl);
   const assets = resolveCobaltAssets(cobaltPayload);
@@ -91,7 +93,7 @@ async function saveViaCobalt(deps, candidate, config) {
       url: assetUrl,
       filename: asset.filename ?? null,
       capturedAt: candidate.capturedAt ?? null,
-    }, config);
+    }, config, externalRefs);
     summary.accepted += itemSummary.accepted;
     summary.duplicate += itemSummary.duplicate;
     summary.failed += itemSummary.failed;
@@ -112,6 +114,7 @@ export async function saveTweetMedia(deps, config, request) {
   const aggregate = { accepted: 0, duplicate: 0, failed: 0 };
   const failures = [];
   const candidateTimeoutMs = request.mode === 'manual' ? 30000 : 45000;
+  const externalRefs = Array.isArray(request.externalRefs) ? request.externalRefs : [];
   let videoHandledByCobalt = false;
   const hasCobaltGifCandidate = request.mediaCandidates?.some(
     (candidate) => candidate?.mediaType === 'gif' && candidate?.strategy === 'cobalt',
@@ -128,8 +131,8 @@ export async function saveTweetMedia(deps, config, request) {
     try {
       const result = await withTimeout(
         candidate.strategy === 'cobalt'
-          ? saveViaCobalt(deps, candidate, config)
-          : saveResolvedRemoteUrl(deps, candidate, config),
+          ? saveViaCobalt(deps, candidate, config, externalRefs)
+          : saveResolvedRemoteUrl(deps, candidate, config, externalRefs),
         candidateTimeoutMs,
         candidate.mediaType === 'video' ? 'Video save' : 'Media save',
       );

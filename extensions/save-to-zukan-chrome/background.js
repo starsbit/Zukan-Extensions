@@ -1,5 +1,6 @@
 import {
   buildApiUrl,
+  buildExternalRefsFromContext,
   createAuthHeaders,
   DEFAULT_MEDIA_VISIBILITY,
   deriveFilename,
@@ -82,17 +83,22 @@ async function parseJsonResponse(response) {
   }
 }
 
-async function ingestUrl({ srcUrl, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY }) {
+async function ingestUrl({ srcUrl, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY, externalRefs = [] }) {
+  const body = {
+    url: srcUrl,
+    visibility,
+  };
+  if (externalRefs.length > 0) {
+    body.external_refs = externalRefs;
+  }
+
   const response = await apiJson(
     '/api/v1/media/ingest-url',
     apiKey,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: srcUrl,
-        visibility,
-      }),
+      body: JSON.stringify(body),
     },
     baseUrl,
   );
@@ -114,10 +120,13 @@ async function fetchMediaBlob(srcUrl) {
   return { blob, filename };
 }
 
-async function uploadBlob({ blob, filename, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY }) {
+async function uploadBlob({ blob, filename, apiKey, baseUrl, visibility = DEFAULT_MEDIA_VISIBILITY, externalRefs = [] }) {
   const formData = new FormData();
   formData.append('files', blob, filename);
   formData.append('visibility', visibility);
+  if (externalRefs.length > 0) {
+    formData.append('external_refs', JSON.stringify(externalRefs));
+  }
   const response = await apiJson(
     '/api/v1/media',
     apiKey,
@@ -152,6 +161,7 @@ async function handleSaveClick(info) {
 
   const { baseUrl, apiKey, mediaVisibility } = await getConfig();
   const normalizedVisibility = normalizeMediaVisibility(mediaVisibility, DEFAULT_MEDIA_VISIBILITY);
+  const externalRefs = buildExternalRefsFromContext(info);
   if (!baseUrl || !apiKey) {
     await updateActionState();
     await openSetup('Open the extension options and add your Zukan URL and API key.');
@@ -174,7 +184,13 @@ async function handleSaveClick(info) {
     return;
   }
 
-  const { response: ingestResponse, payload: ingestPayload } = await ingestUrl({ srcUrl: info.srcUrl, apiKey, baseUrl, visibility: normalizedVisibility });
+  const { response: ingestResponse, payload: ingestPayload } = await ingestUrl({
+    srcUrl: info.srcUrl,
+    apiKey,
+    baseUrl,
+    visibility: normalizedVisibility,
+    externalRefs,
+  });
   if (ingestResponse.ok) {
     await notifyBatchResult(ingestPayload);
     return;
@@ -200,7 +216,14 @@ async function handleSaveClick(info) {
   }
 
   const { blob, filename } = await fetchMediaBlob(info.srcUrl);
-  const { response: uploadResponse, payload: uploadPayload } = await uploadBlob({ blob, filename, apiKey, baseUrl, visibility: normalizedVisibility });
+  const { response: uploadResponse, payload: uploadPayload } = await uploadBlob({
+    blob,
+    filename,
+    apiKey,
+    baseUrl,
+    visibility: normalizedVisibility,
+    externalRefs,
+  });
   if (uploadResponse.ok) {
     await notifyBatchResult(uploadPayload);
     return;

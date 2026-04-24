@@ -117,19 +117,36 @@ async function parseJsonResponse(response) {
   }
 }
 
-async function ingestUrl({ srcUrl, apiKey, baseUrl, capturedAt = null, visibility = DEFAULT_MEDIA_VISIBILITY }) {
-  debugLog('Attempting ingest-url save', { srcUrl, baseUrl, capturedAt, visibility });
+async function ingestUrl({
+  srcUrl,
+  apiKey,
+  baseUrl,
+  capturedAt = null,
+  visibility = DEFAULT_MEDIA_VISIBILITY,
+  externalRefs = [],
+}) {
+  debugLog('Attempting ingest-url save', {
+    srcUrl,
+    baseUrl,
+    capturedAt,
+    visibility,
+    externalRefCount: externalRefs.length,
+  });
+  const body = {
+    url: srcUrl,
+    captured_at: capturedAt,
+    visibility,
+  };
+  if (externalRefs.length > 0) {
+    body.external_refs = externalRefs;
+  }
   const response = await apiJson(
     '/api/v1/media/ingest-url',
     apiKey,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: srcUrl,
-        captured_at: capturedAt,
-        visibility,
-      }),
+      body: JSON.stringify(body),
     },
     baseUrl,
   );
@@ -153,7 +170,15 @@ async function fetchMediaBlob(srcUrl, preferredFilename = null) {
   return { blob, filename };
 }
 
-async function uploadBlob({ blob, filename, apiKey, baseUrl, capturedAt = null, visibility = DEFAULT_MEDIA_VISIBILITY }) {
+async function uploadBlob({
+  blob,
+  filename,
+  apiKey,
+  baseUrl,
+  capturedAt = null,
+  visibility = DEFAULT_MEDIA_VISIBILITY,
+  externalRefs = [],
+}) {
   debugLog('Uploading blob to Zukan', {
     filename,
     baseUrl,
@@ -161,12 +186,16 @@ async function uploadBlob({ blob, filename, apiKey, baseUrl, capturedAt = null, 
     type: blob.type || null,
     capturedAt,
     visibility,
+    externalRefCount: externalRefs.length,
   });
   const formData = new FormData();
   formData.append('files', blob, filename);
   formData.append('visibility', visibility);
   if (capturedAt) {
     formData.append('captured_at', capturedAt);
+  }
+  if (externalRefs.length > 0) {
+    formData.append('external_refs', JSON.stringify(externalRefs));
   }
   const response = await apiJson(
     '/api/v1/media',

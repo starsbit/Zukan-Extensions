@@ -13,6 +13,17 @@ const EXTENSION_BY_CONTENT_TYPE = {
 const FALLBACK_INGEST_STATUSES = new Set([400, 403, 404, 415, 422, 502]);
 export const DEFAULT_MEDIA_VISIBILITY = 'private';
 
+function toAbsoluteUrl(value, origin = 'https://x.com') {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  try {
+    return new URL(value, origin).toString();
+  } catch {
+    return null;
+  }
+}
+
 function safeDecodeURIComponent(value) {
   try {
     return decodeURIComponent(value);
@@ -33,6 +44,43 @@ export function isHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+export function normalizeTweetPermalink(value) {
+  const absolute = toAbsoluteUrl(value);
+  if (!absolute) return null;
+
+  try {
+    const url = new URL(absolute);
+    const match = url.pathname.match(/^\/([^/]+)\/status\/(\d+)/i);
+    if (!match) return null;
+    return `https://x.com/${match[1]}/status/${match[2]}`;
+  } catch {
+    return null;
+  }
+}
+
+export function buildTwitterExternalRef(value) {
+  const normalizedUrl = normalizeTweetPermalink(value);
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  const match = new URL(normalizedUrl).pathname.match(/^\/[^/]+\/status\/(\d+)/i);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    provider: 'twitter',
+    external_id: match[1],
+    url: normalizedUrl,
+  };
+}
+
+export function buildExternalRefsFromContext({ pageUrl, frameUrl } = {}) {
+  const externalRef = buildTwitterExternalRef(pageUrl) || buildTwitterExternalRef(frameUrl);
+  return externalRef ? [externalRef] : [];
 }
 
 export function normalizeBaseUrl(value) {

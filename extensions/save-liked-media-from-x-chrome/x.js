@@ -27,6 +27,24 @@ export function normalizeTweetPermalink(value) {
   }
 }
 
+export function buildTwitterExternalRef(value) {
+  const normalizedUrl = normalizeTweetPermalink(value);
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  const match = new URL(normalizedUrl).pathname.match(/^\/[^/]+\/status\/(\d+)/i);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    provider: 'twitter',
+    external_id: match[1],
+    url: normalizedUrl,
+  };
+}
+
 export function normalizeXImageUrl(value) {
   const absolute = toAbsoluteUrl(value);
   if (!absolute) return null;
@@ -457,6 +475,7 @@ export function createXContentController({
 
     const capturedAt = extractTweetCapturedAt(article);
     const mediaCandidates = extractMediaCandidatesFromArticle(article, tweetUrl, capturedAt);
+    const externalRef = buildTwitterExternalRef(tweetUrl);
     if (mediaCandidates.length === 0) {
       debugLog('Skipping tweet without media candidates', { tweetUrl });
       return { skipped: true, duplicateFound: false };
@@ -476,6 +495,7 @@ export function createXContentController({
           mode,
           tweetUrl,
           capturedAt,
+          externalRefs: externalRef ? [externalRef] : [],
           mediaCandidates,
         },
       }),

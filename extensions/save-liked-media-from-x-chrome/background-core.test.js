@@ -15,11 +15,15 @@ test('resolveCobaltAssets accepts tunnel responses', () => {
 });
 
 test('saveTweetMedia reports duplicates from direct ingest', async () => {
+  let ingestArgs = null;
   const result = await saveTweetMedia({
-    ingestUrl: async () => ({
-      response: { ok: true },
-      payload: { results: [{ status: 'duplicate' }] },
-    }),
+    ingestUrl: async (args) => {
+      ingestArgs = args;
+      return {
+        response: { ok: true },
+        payload: { results: [{ status: 'duplicate' }] },
+      };
+    },
     uploadBlob: async () => {
       throw new Error('should not upload');
     },
@@ -35,6 +39,11 @@ test('saveTweetMedia reports duplicates from direct ingest', async () => {
     apiKey: 'zk_123',
     cobaltBaseUrl: 'https://api.cobalt.tools',
   }, {
+    externalRefs: [{
+      provider: 'twitter',
+      external_id: '123',
+      url: 'https://x.com/demo/status/123',
+    }],
     mediaCandidates: [{
       mediaType: 'image',
       strategy: 'direct',
@@ -45,6 +54,11 @@ test('saveTweetMedia reports duplicates from direct ingest', async () => {
 
   assert.equal(result.duplicateFound, true);
   assert.deepEqual(result.summary, { accepted: 0, duplicate: 1, failed: 0 });
+  assert.deepEqual(ingestArgs?.externalRefs, [{
+    provider: 'twitter',
+    external_id: '123',
+    url: 'https://x.com/demo/status/123',
+  }]);
 });
 
 test('saveTweetMedia returns combined duplicate and accepted counts for multi-media tweets', async () => {
@@ -135,13 +149,15 @@ test('saveTweetMedia uploads cobalt-resolved assets via ingest-url', async () =>
 
 test('saveTweetMedia falls back to blob upload when cobalt ingest fails', async () => {
   let uploaded = 0;
+  let uploadArgs = null;
   const result = await saveTweetMedia({
     ingestUrl: async () => ({
       response: { ok: false, status: 415 },
       payload: {},
     }),
-    uploadBlob: async () => {
+    uploadBlob: async (args) => {
       uploaded += 1;
+      uploadArgs = args;
       return {
         response: { ok: true },
         payload: { results: [{ status: 'accepted' }] },
@@ -162,6 +178,11 @@ test('saveTweetMedia falls back to blob upload when cobalt ingest fails', async 
     apiKey: 'zk_123',
     cobaltBaseUrl: 'https://api.cobalt.tools',
   }, {
+    externalRefs: [{
+      provider: 'twitter',
+      external_id: '123',
+      url: 'https://x.com/demo/status/123',
+    }],
     mediaCandidates: [{
       mediaType: 'video',
       strategy: 'cobalt',
@@ -173,6 +194,11 @@ test('saveTweetMedia falls back to blob upload when cobalt ingest fails', async 
   assert.equal(uploaded, 1);
   assert.equal(result.hasFailure, false);
   assert.deepEqual(result.summary, { accepted: 1, duplicate: 0, failed: 0 });
+  assert.deepEqual(uploadArgs?.externalRefs, [{
+    provider: 'twitter',
+    external_id: '123',
+    url: 'https://x.com/demo/status/123',
+  }]);
 });
 
 test('saveTweetMedia prefers cobalt video and skips direct video once cobalt succeeds', async () => {
