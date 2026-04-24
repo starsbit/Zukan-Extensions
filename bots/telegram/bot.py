@@ -266,7 +266,7 @@ async def upload_asset(
         files=[("files", (filename, media_resp.content, upload_content_type))],
         data={
             "visibility": DEFAULT_VISIBILITY,
-            **({"external_refs": json.dumps(external_refs)} if external_refs else {}),
+            **({"external_refs_values": json.dumps(external_refs)} if external_refs else {}),
         },
         headers=auth,
         timeout=120.0,

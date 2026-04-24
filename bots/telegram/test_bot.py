@@ -54,7 +54,7 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual((accepted, duplicate, failed, reasons), (1, 0, 0, []))
         self.assertEqual(client.post.await_args_list[0].kwargs["json"]["external_refs"], external_refs)
-        self.assertEqual(client.post.await_args_list[1].kwargs["data"]["external_refs"], '[{"provider": "twitter", "external_id": "123", "url": "https://x.com/demo/status/123"}]')
+        self.assertEqual(client.post.await_args_list[1].kwargs["data"]["external_refs_values"], '[{"provider": "twitter", "external_id": "123", "url": "https://x.com/demo/status/123"}]')
 
 
 class TwitterExternalRefTests(unittest.TestCase):
