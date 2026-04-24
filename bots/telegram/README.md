@@ -25,6 +25,7 @@ COBALT_AUTH_TOKEN=                         # optional; required if your Cobalt r
 COBALT_AUTH_HEADER=Authorization           # optional
 COBALT_AUTH_SCHEME=Bearer                  # optional; blank means send raw token
 DEFAULT_VISIBILITY=private                  # allowed: private or public
+LOG_LEVEL=INFO                             # optional: DEBUG, INFO, WARNING, ERROR
 ```
 
 ## Running with Docker (recommended)
@@ -39,6 +40,7 @@ docker run -d --restart unless-stopped --env-file .env --name zukan-twt-gateway 
 ```
 
 The container only responds to the configured `ALLOWED_TELEGRAM_USER_ID`.
+Bot logs are written to stdout, so `docker logs zukan-twt-gateway` should show startup, ingest, upload, and Twitter reference update failures.
 
 ### Adding to docker-compose
 
