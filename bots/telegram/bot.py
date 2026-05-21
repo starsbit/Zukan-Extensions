@@ -39,6 +39,14 @@ TWEET_RE = re.compile(
     r"https?://(?:x|twitter)\.com/([^/?\s]+)/status/(\d+)",
     re.IGNORECASE,
 )
+TIKTOK_LONG_RE = re.compile(
+    r"https?://(?:www\.)?tiktok\.com/@([^/?\s]+)/video/(\d+)",
+    re.IGNORECASE,
+)
+TIKTOK_SHORT_RE = re.compile(
+    r"https?://(?:vm|vt|m)\.tiktok\.com/([^/?#\s]+)",
+    re.IGNORECASE,
+)
 
 CONTENT_TYPE_EXT = {
     "image/jpeg": "jpg",
@@ -75,6 +83,16 @@ def normalize_tweet_url(text: str) -> str | None:
     return f"https://x.com/{m.group(1)}/status/{m.group(2)}"
 
 
+def normalize_tiktok_url(text: str) -> str | None:
+    m = TIKTOK_LONG_RE.search(text)
+    if m:
+        return f"https://www.tiktok.com/@{m.group(1)}/video/{m.group(2)}"
+    m = TIKTOK_SHORT_RE.search(text)
+    if m:
+        return m.group(0)
+    return None
+
+
 def build_twitter_external_ref(tweet_url: str) -> dict[str, str] | None:
     normalized = normalize_tweet_url(tweet_url)
     if not normalized:
@@ -87,6 +105,24 @@ def build_twitter_external_ref(tweet_url: str) -> dict[str, str] | None:
         "external_id": match.group(2),
         "url": normalized,
     }
+
+
+def build_tiktok_external_ref(tiktok_url: str) -> dict[str, str] | None:
+    m = TIKTOK_LONG_RE.search(tiktok_url)
+    if m:
+        return {
+            "provider": "tiktok",
+            "external_id": m.group(2),
+            "url": f"https://www.tiktok.com/@{m.group(1)}/video/{m.group(2)}",
+        }
+    m = TIKTOK_SHORT_RE.search(tiktok_url)
+    if m:
+        return {
+            "provider": "tiktok",
+            "external_id": m.group(1),
+            "url": m.group(0),
+        }
+    return None
 
 
 def _ext_from_content_type(content_type: str) -> str:
@@ -431,17 +467,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     text = update.message.text or ""
     tweet_url = normalize_tweet_url(text)
+    tiktok_url = normalize_tiktok_url(text)
 
-    if not tweet_url:
-        await update.message.reply_text("Send me a Twitter/X tweet URL and I'll save the media to Zukan.")
+    if not tweet_url and not tiktok_url:
+        await update.message.reply_text(
+            "Send me a Twitter/X or TikTok URL and I'll save the media to Zukan."
+        )
         return
 
     await update.message.reply_text("Fetching media\u2026")
 
     try:
         async with httpx.AsyncClient() as client:
-            assets = await resolve_cobalt(client, tweet_url)
-            external_ref = build_twitter_external_ref(tweet_url)
+            if tweet_url:
+                media_url = tweet_url
+                external_ref = build_twitter_external_ref(tweet_url)
+            else:
+                media_url = tiktok_url
+                external_ref = build_tiktok_external_ref(tiktok_url)
+
+            assets = await resolve_cobalt(client, media_url)
             external_refs = [external_ref] if external_ref else []
 
             total_accepted = total_duplicate = total_failed = 0
