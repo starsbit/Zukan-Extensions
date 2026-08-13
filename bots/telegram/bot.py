@@ -1,10 +1,7 @@
 import os
 import re
 import logging
-import json
 import sys
-from pathlib import Path
-from urllib.parse import urlparse, unquote
 
 import httpx
 from dotenv import load_dotenv
@@ -24,10 +21,6 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ZUKAN_BASE_URL = os.environ["ZUKAN_BASE_URL"].rstrip("/")
 ZUKAN_TOKEN = os.environ["ZUKAN_TOKEN"]
-COBALT_BASE_URL = os.environ.get("COBALT_BASE_URL", "https://api.cobalt.tools").rstrip("/")
-COBALT_AUTH_TOKEN = os.environ.get("COBALT_AUTH_TOKEN", "").strip()
-COBALT_AUTH_HEADER = os.environ.get("COBALT_AUTH_HEADER", "Authorization").strip() or "Authorization"
-COBALT_AUTH_SCHEME = os.environ.get("COBALT_AUTH_SCHEME", "Bearer").strip()
 DEFAULT_VISIBILITY = os.environ.get("DEFAULT_VISIBILITY", "private").strip().lower() or "private"
 ALLOWED_TELEGRAM_USER_ID = int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
@@ -47,33 +40,6 @@ TIKTOK_SHORT_RE = re.compile(
     r"https?://(?:vm|vt|m)\.tiktok\.com/([^/?#\s]+)",
     re.IGNORECASE,
 )
-
-CONTENT_TYPE_EXT = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/gif": "gif",
-    "image/avif": "avif",
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-    "video/x-msvideo": "avi",
-}
-
-EXT_CONTENT_TYPE = {
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "png": "image/png",
-    "webp": "image/webp",
-    "gif": "image/gif",
-    "avif": "image/avif",
-    "mp4": "video/mp4",
-    "webm": "video/webm",
-    "mov": "video/quicktime",
-    "avi": "video/x-msvideo",
-}
-
-INGEST_FALLBACK_STATUSES = {400, 403, 404, 415, 422, 502}
 
 
 def normalize_tweet_url(text: str) -> str | None:
@@ -123,72 +89,6 @@ def build_tiktok_external_ref(tiktok_url: str) -> dict[str, str] | None:
             "url": m.group(0),
         }
     return None
-
-
-def _ext_from_content_type(content_type: str) -> str:
-    base = content_type.split(";", 1)[0].strip().lower()
-    return CONTENT_TYPE_EXT.get(base, "")
-
-
-def _content_type_from_filename(filename: str) -> str:
-    ext = Path(filename).suffix.lower().lstrip(".")
-    return EXT_CONTENT_TYPE.get(ext, "")
-
-
-def _normalize_upload_content_type(content_type: str, filename: str) -> str:
-    base = content_type.split(";", 1)[0].strip().lower() if content_type else ""
-    if base and base != "application/octet-stream":
-        return base
-    inferred = _content_type_from_filename(filename)
-    return inferred or base or "application/octet-stream"
-
-
-def _filename_from_disposition(header: str | None) -> str | None:
-    if not header:
-        return None
-    m = re.search(r"filename\*\s*=\s*UTF-8''([^;]+)", header, re.IGNORECASE)
-    if m:
-        return unquote(m.group(1)).strip()
-    m = re.search(r'filename\s*=\s*"([^"]+)"|filename\s*=\s*([^;]+)', header, re.IGNORECASE)
-    raw = m.group(1) or m.group(2) if m else None
-    return raw.strip() if raw else None
-
-
-def _ensure_ext(filename: str, content_type: str = "") -> str:
-    if re.search(r"\.[A-Za-z0-9]{2,5}$", filename):
-        return filename
-    ext = _ext_from_content_type(content_type)
-    return f"{filename}.{ext}" if ext else filename
-
-
-def derive_filename(
-    url: str,
-    content_type: str = "",
-    content_disposition: str = "",
-) -> str:
-    from_header = _filename_from_disposition(content_disposition)
-    if from_header:
-        return _ensure_ext(from_header, content_type)
-    try:
-        path = urlparse(url).path
-        last = [p for p in path.split("/") if p][-1]
-        if last:
-            return _ensure_ext(unquote(last), content_type)
-    except Exception:
-        pass
-    ext = _ext_from_content_type(content_type)
-    return f"zukan-media.{ext}" if ext else "zukan-media"
-
-
-def _should_fallback(status: int, payload: dict) -> bool:
-    if status not in INGEST_FALLBACK_STATUSES:
-        return False
-    detail = (payload.get("detail") or "").lower() if isinstance(payload, dict) else ""
-    if status == 403 and ("not authenticated" in detail or "invalid token" in detail):
-        return False
-    if status == 422 and "not authenticated" in detail:
-        return False
-    return True
 
 
 def _extract_result_reason(result: dict) -> str:
@@ -325,73 +225,14 @@ async def _apply_external_refs_to_results(
     return failures
 
 
-def _cobalt_headers() -> dict[str, str]:
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
-    if COBALT_AUTH_TOKEN:
-        headers[COBALT_AUTH_HEADER] = (
-            f"{COBALT_AUTH_SCHEME} {COBALT_AUTH_TOKEN}" if COBALT_AUTH_SCHEME else COBALT_AUTH_TOKEN
-        )
-    return headers
-
-
-async def is_cobalt_reachable(client: httpx.AsyncClient) -> tuple[bool, str]:
-    try:
-        resp = await client.get(
-            f"{COBALT_BASE_URL}/",
-            headers=_cobalt_headers(),
-            timeout=8.0,
-            follow_redirects=True,
-        )
-        return True, f"status={resp.status_code}"
-    except httpx.RequestError as exc:
-        return False, str(exc)
-
-
-async def resolve_cobalt(client: httpx.AsyncClient, tweet_url: str) -> list[dict]:
-    resp = await client.post(
-        f"{COBALT_BASE_URL}/",
-        json={"url": tweet_url, "downloadMode": "auto", "filenameStyle": "basic"},
-        headers=_cobalt_headers(),
-        timeout=30.0,
-    )
-    try:
-        payload = resp.json()
-    except Exception:
-        payload = {"status": "error", "error": {"code": f"http_{resp.status_code}"}}
-
-    if not resp.is_success:
-        code = payload.get("error", {}).get("code", f"http_{resp.status_code}")
-        if code == "error.api.auth.jwt.missing":
-            raise ValueError(
-                "Cobalt requires authentication. Set COBALT_AUTH_TOKEN (and optionally COBALT_AUTH_HEADER/COBALT_AUTH_SCHEME)."
-            )
-        raise ValueError(f"Cobalt error: {code}")
-
-    status = payload.get("status")
-    if status in ("redirect", "tunnel"):
-        return [{"url": payload["url"], "filename": payload.get("filename")}]
-    if status == "picker":
-        return [
-            {"url": item["url"], "filename": item.get("filename")}
-            for item in payload.get("picker", [])
-            if item.get("url")
-        ]
-    if status == "error":
-        code = payload.get("error", {}).get("code", "unknown")
-        raise ValueError(f"Cobalt error: {code}")
-    raise ValueError(f"Unexpected Cobalt response: {status}")
-
-
-async def upload_asset(
+async def ingest_media(
     client: httpx.AsyncClient,
-    asset: dict,
+    media_url: str,
     external_refs: list[dict[str, str]] | None = None,
 ) -> tuple[int, int, int, list[str]]:
-    url = asset["url"]
-    preferred_filename = asset.get("filename")
     auth = {"Authorization": f"Bearer {ZUKAN_TOKEN}"}
     external_refs = external_refs or []
-    ingest_payload = {"url": url, "visibility": DEFAULT_VISIBILITY, "captured_at": None}
+    ingest_payload = {"url": media_url, "visibility": DEFAULT_VISIBILITY, "captured_at": None}
     if external_refs:
         ingest_payload["external_refs"] = external_refs
 
@@ -408,57 +249,15 @@ async def upload_asset(
         len(external_refs),
     )
 
-    if ingest_resp.status_code == 202:
-        results = ingest_result.get("results", [])
-        accepted, duplicate, failed, failure_reasons = _summarize(results)
-        ref_failures = await _apply_external_refs_to_results(client, results, external_refs, auth)
-        failure_reasons.extend(ref_failures)
-        return accepted, duplicate, failed + len(ref_failures), failure_reasons
-
-    if not _should_fallback(ingest_resp.status_code, ingest_result):
+    if ingest_resp.status_code != 202:
         detail = _response_detail(ingest_resp, ingest_result)
         raise ValueError(f"Zukan ingest failed: {detail}")
 
-    logger.info(
-        "Zukan ingest-url fell back to direct upload status=%s detail=%s",
-        ingest_resp.status_code,
-        _response_detail(ingest_resp, ingest_result),
-    )
-    media_resp = await client.get(url, timeout=30.0, follow_redirects=True)
-    media_resp.raise_for_status()
-
-    content_type = media_resp.headers.get("content-type", "")
-    content_disposition = media_resp.headers.get("content-disposition", "")
-    filename = preferred_filename or derive_filename(url, content_type, content_disposition)
-    upload_content_type = _normalize_upload_content_type(content_type, filename)
-
-    upload_resp = await client.post(
-        f"{ZUKAN_BASE_URL}/api/v1/media",
-        files=[("files", (filename, media_resp.content, upload_content_type))],
-        data={
-            "visibility": DEFAULT_VISIBILITY,
-            **({"external_refs_values": json.dumps(external_refs)} if external_refs else {}),
-        },
-        headers=auth,
-        timeout=120.0,
-    )
-    upload_payload = _json_or_empty(upload_resp)
-    logger.info(
-        "Zukan direct upload response status=%s filename=%s external_ref_count=%s",
-        upload_resp.status_code,
-        filename,
-        len(external_refs),
-    )
-
-    if upload_resp.status_code == 202:
-        results = upload_payload.get("results", [])
-        accepted, duplicate, failed, failure_reasons = _summarize(results)
-        ref_failures = await _apply_external_refs_to_results(client, results, external_refs, auth)
-        failure_reasons.extend(ref_failures)
-        return accepted, duplicate, failed + len(ref_failures), failure_reasons
-
-    detail = _response_detail(upload_resp, upload_payload)
-    raise ValueError(f"Upload failed: {detail}")
+    results = ingest_result.get("results", [])
+    accepted, duplicate, failed, failure_reasons = _summarize(results)
+    ref_failures = await _apply_external_refs_to_results(client, results, external_refs, auth)
+    failure_reasons.extend(ref_failures)
+    return accepted, duplicate, failed + len(ref_failures), failure_reasons
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -486,31 +285,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 media_url = tiktok_url
                 external_ref = build_tiktok_external_ref(tiktok_url)
 
-            assets = await resolve_cobalt(client, media_url)
             external_refs = [external_ref] if external_ref else []
-
-            total_accepted = total_duplicate = total_failed = 0
-            failure_reasons: list[str] = []
-
-            for asset in assets:
-                try:
-                    a, d, f, reasons = await upload_asset(client, asset, external_refs)
-                    total_accepted += a
-                    total_duplicate += d
-                    total_failed += f
-                    failure_reasons.extend(r for r in reasons if r)
-                except Exception as exc:
-                    total_failed += 1
-                    logger.exception("Failed to process asset from Cobalt: %s", asset.get("url", "unknown-url"))
-                    failure_reasons.append(str(exc))
+            accepted, duplicate, failed, failure_reasons = await ingest_media(client, media_url, external_refs)
 
             parts = []
-            if total_accepted:
-                parts.append(f"{total_accepted} saved")
-            if total_duplicate:
-                parts.append(f"{total_duplicate} duplicate")
-            if total_failed:
-                parts.append(f"{total_failed} failed")
+            if accepted:
+                parts.append(f"{accepted} saved")
+            if duplicate:
+                parts.append(f"{duplicate} duplicate")
+            if failed:
+                parts.append(f"{failed} failed")
             if failure_reasons:
                 first_reason = failure_reasons[0]
                 if len(first_reason) > 180:
@@ -528,24 +312,34 @@ def _is_authorized(update: Update) -> bool:
     return bool(user and user.id == ALLOWED_TELEGRAM_USER_ID)
 
 
+async def is_zukan_reachable(client: httpx.AsyncClient) -> tuple[bool, str]:
+    try:
+        resp = await client.get(
+            f"{ZUKAN_BASE_URL}/api/v1/config/setup-required",
+            timeout=8.0,
+        )
+        return resp.is_success, f"status={resp.status_code}"
+    except httpx.RequestError as exc:
+        return False, str(exc)
+
+
 async def health(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_authorized(update):
         return
 
     async with httpx.AsyncClient() as client:
-        reachable, detail = await is_cobalt_reachable(client)
+        reachable, detail = await is_zukan_reachable(client)
 
     if reachable:
         await update.message.reply_text("ok")
     else:
-        await update.message.reply_text(f"unhealthy: cobalt unreachable ({detail})")
+        await update.message.reply_text(f"unhealthy: zukan unreachable ({detail})")
 
 
 def main() -> None:
     logger.info(
-        "Starting Zukan Telegram bot zukan_base_url=%s cobalt_base_url=%s default_visibility=%s",
+        "Starting Zukan Telegram bot zukan_base_url=%s default_visibility=%s",
         ZUKAN_BASE_URL,
-        COBALT_BASE_URL,
         DEFAULT_VISIBILITY,
     )
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

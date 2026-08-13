@@ -2,7 +2,7 @@
 
 Telegram bot that accepts Twitter/X tweet URLs and saves their media to a Zukan instance.
 
-**Flow:** tweet URL → Cobalt resolves media → Zukan `ingest-url` with Twitter `external_refs` (server-side download) or direct upload fallback with the same metadata → reply with result summary.
+**Flow:** tweet/TikTok URL → Zukan `ingest-url` (server resolves the media via Cobalt and downloads it) with Twitter/TikTok `external_refs` → reply with result summary.
 
 ## Prerequisites
 
@@ -20,10 +20,6 @@ TELEGRAM_BOT_TOKEN=   # from BotFather
 ALLOWED_TELEGRAM_USER_ID=   # numeric Telegram user id allowed to use this bot
 ZUKAN_BASE_URL=       # e.g. https://zukan.example.com
 ZUKAN_TOKEN=          # Bearer token for the Zukan API
-COBALT_BASE_URL=https://api.cobalt.tools   # leave as-is unless self-hosting Cobalt
-COBALT_AUTH_TOKEN=                         # optional; required if your Cobalt requires auth
-COBALT_AUTH_HEADER=Authorization           # optional
-COBALT_AUTH_SCHEME=Bearer                  # optional; blank means send raw token
 DEFAULT_VISIBILITY=private                  # allowed: private or public
 LOG_LEVEL=INFO                             # optional: DEBUG, INFO, WARNING, ERROR
 ```
@@ -62,7 +58,6 @@ The bot needs network access to:
 
 - The Zukan API (can be the internal Docker network name, e.g. `http://api:8000`)
 - Telegram servers (outbound HTTPS)
-- `api.cobalt.tools` (outbound HTTPS, or your self-hosted Cobalt instance)
 
 ## Running without Docker
 
@@ -94,4 +89,4 @@ The bot replies with a summary:
 
 Non-tweet messages receive a usage hint.
 
-The `/health` command returns `ok` for the allowed Telegram user only when the configured Cobalt instance is reachable.
+The `/health` command returns `ok` for the allowed Telegram user only when the Zukan API is reachable.

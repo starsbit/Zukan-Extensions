@@ -33,11 +33,11 @@ telegram_ext_module.ContextTypes = types.SimpleNamespace(DEFAULT_TYPE=object)
 sys.modules.setdefault("telegram.ext", telegram_ext_module)
 
 
-from bot import build_twitter_external_ref, upload_asset  # noqa: E402
+from bot import build_twitter_external_ref, ingest_media  # noqa: E402
 
 
-class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_upload_asset_patches_external_refs_after_ingest_duplicate(self):
+class IngestMediaExternalRefsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ingest_media_patches_external_refs_after_ingest_duplicate(self):
         client = AsyncMock()
         media_id = "00000000-0000-0000-0000-000000000001"
         client.post.return_value = types.SimpleNamespace(
@@ -56,9 +56,9 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             "url": "https://x.com/demo/status/123",
         }]
 
-        accepted, duplicate, failed, reasons = await upload_asset(
+        accepted, duplicate, failed, reasons = await ingest_media(
             client,
-            {"url": "https://pbs.twimg.com/media/example.jpg?format=jpg&name=orig"},
+            "https://x.com/demo/status/123",
             external_refs,
         )
 
@@ -70,25 +70,13 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             timeout=30.0,
         )
 
-    async def test_upload_asset_sends_external_refs_to_ingest_and_fallback_upload(self):
+    async def test_ingest_media_raises_on_non_202_response(self):
         client = AsyncMock()
-        media_id = "00000000-0000-0000-0000-000000000002"
-        client.post.side_effect = [
-            types.SimpleNamespace(status_code=415, json=lambda: {}, is_success=False),
-            types.SimpleNamespace(status_code=202, json=lambda: {"results": [{"id": media_id, "status": "accepted"}]}),
-        ]
-        client.patch.return_value = types.SimpleNamespace(status_code=200)
-        client.get.side_effect = [
-            types.SimpleNamespace(
-                headers={"content-type": "image/jpeg", "content-disposition": ""},
-                content=b"image-bytes",
-                raise_for_status=lambda: None,
-            ),
-            types.SimpleNamespace(
-                status_code=200,
-                json=lambda: {"external_refs": []},
-            ),
-        ]
+        client.post.return_value = types.SimpleNamespace(
+            status_code=422,
+            json=lambda: {"detail": "URL resolves to a blocked host 192.168.178.102"},
+            text='{"detail":"URL resolves to a blocked host 192.168.178.102"}',
+        )
 
         external_refs = [{
             "provider": "twitter",
@@ -96,23 +84,10 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             "url": "https://x.com/demo/status/123",
         }]
 
-        accepted, duplicate, failed, reasons = await upload_asset(
-            client,
-            {"url": "https://pbs.twimg.com/media/example.jpg?format=jpg&name=orig"},
-            external_refs,
-        )
+        with self.assertRaises(ValueError):
+            await ingest_media(client, "https://x.com/demo/status/123", external_refs)
 
-        self.assertEqual((accepted, duplicate, failed, reasons), (1, 0, 0, []))
-        self.assertEqual(client.post.await_args_list[0].kwargs["json"]["external_refs"], external_refs)
-        self.assertEqual(client.post.await_args_list[1].kwargs["data"]["external_refs_values"], '[{"provider": "twitter", "external_id": "123", "url": "https://x.com/demo/status/123"}]')
-        client.patch.assert_awaited_once_with(
-            f"https://zukan.example/api/v1/media/{media_id}",
-            json={"external_refs": external_refs},
-            headers={"Authorization": "Bearer zk_test", "Content-Type": "application/json"},
-            timeout=30.0,
-        )
-
-    async def test_upload_asset_reports_external_ref_patch_failure(self):
+    async def test_ingest_media_reports_external_ref_patch_failure(self):
         client = AsyncMock()
         media_id = "00000000-0000-0000-0000-000000000003"
         client.post.return_value = types.SimpleNamespace(
@@ -135,9 +110,9 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             "url": "https://x.com/demo/status/123",
         }]
 
-        accepted, duplicate, failed, reasons = await upload_asset(
+        accepted, duplicate, failed, reasons = await ingest_media(
             client,
-            {"url": "https://pbs.twimg.com/media/example.jpg?format=jpg&name=orig"},
+            "https://x.com/demo/status/123",
             external_refs,
         )
 
@@ -146,7 +121,7 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             f"Twitter ref update failed for {media_id}: external refs invalid",
         ])
 
-    async def test_upload_asset_skips_patch_when_external_refs_are_already_present(self):
+    async def test_ingest_media_skips_patch_when_external_refs_are_already_present(self):
         client = AsyncMock()
         media_id = "00000000-0000-0000-0000-000000000004"
         external_refs = [{
@@ -163,9 +138,9 @@ class UploadAssetExternalRefsTests(unittest.IsolatedAsyncioTestCase):
             json=lambda: {"external_refs": external_refs},
         )
 
-        accepted, duplicate, failed, reasons = await upload_asset(
+        accepted, duplicate, failed, reasons = await ingest_media(
             client,
-            {"url": "https://pbs.twimg.com/media/example.jpg?format=jpg&name=orig"},
+            "https://x.com/demo/status/123",
             external_refs,
         )
 
